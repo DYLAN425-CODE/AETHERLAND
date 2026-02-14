@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETHELGARD | GM COMMAND CENTER</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Montserrat:wght@300;400;600;800&family=Fira+Code&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --gold: #d4af37;
+            --red: #ff3e3e;
+            --green: #00ff88;
+            --blue: #00d2ff;
+            --font-display: 'Cinzel', serif;
+            --font-body: 'Montserrat', sans-serif;
+            --font-mono: 'Fira Code', monospace;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: var(--font-body); color: #fff; overflow-x:hidden; background: #000; }
+
+        /* --- STATE MANAGEMENT FIX --- */
+        body.gm-active .hero, body.gm-active .navbar, body.gm-active .nav-overlay,
+        body.overlay-active .hero, body.overlay-active .navbar {
+            display: none !important;
+        }
+
+        .bg-fixed {
+            position: fixed; inset:0;
+            background: url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=2568') center/cover no-repeat;
+            z-index:-1;
+            filter: brightness(0.4);
+        }
+
+        /* --- BROADCAST TICKER --- */
+        #liveAlert {
+            position: fixed; bottom: 30px; left: 50%;
+            transform: translateX(-50%) translateY(150px);
+            width: 90%; max-width: 900px; padding: 12px 20px;
+            display: flex; align-items: center; z-index: 900;
+            background: rgba(139, 0, 0, 0.85); backdrop-filter: blur(12px);
+            border: 1px solid var(--red); box-shadow: 0 0 40px rgba(255, 62, 62, 0.3);
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border-radius: 4px; overflow: hidden;
+        }
+        #liveAlert.active { transform: translateX(-50%) translateY(0); }
+
+        .live-tag {
+            background: #fff; color: #000; padding: 4px 12px; font-size: 10px;
+            font-weight: 900; margin-right: 20px; border-radius: 2px;
+            display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+            font-family: var(--font-mono);
+        }
+        .live-dot { width: 8px; height: 8px; background: var(--red); border-radius: 50%; animation: blink 1s infinite; }
+
+        .ticker-wrap { flex-grow: 1; overflow: hidden; white-space: nowrap; mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); }
+        .ticker-text { display: inline-block; padding-left: 100%; animation: marquee 10s linear infinite; font-family: var(--font-mono); font-size: 14px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes marquee { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
+
+        /* Maintenance Shield */
+        #maint-shield { position: fixed; inset:0; display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 9999; background: rgba(0,0,0,0.98); }
+        .glitch-text { 
+            font-family: var(--font-display); font-size:3rem; color: var(--red); cursor:pointer; 
+            letter-spacing: 5px; text-align: center; user-select: none;
+        }
+
+        /* Navbar */
+        .navbar { position: fixed; top:0; width:100%; height:70px; display:flex; justify-content: space-between; align-items:center; padding: 0 5%; z-index:1000; }
+        .brand { font-family: var(--font-display); font-size: 24px; cursor:pointer; background: linear-gradient(45deg, #fff, var(--gold)); -webkit-background-clip:text; -webkit-text-fill-color: transparent; }
+        .burger { display:flex; flex-direction: column; gap:5px; cursor:pointer; z-index:1100; }
+        .burger div { width:25px; height:2px; background:#fff; }
+
+        .nav-overlay { position: fixed; top:0; right:-100%; width:100%; height:100%; background: rgba(0,0,0,0.95); display:flex; flex-direction: column; justify-content:center; align-items:center; transition:0.5s; z-index:1050; }
+        .nav-overlay.active { right:0; }
+        .nav-link { color:#fff; font-family: var(--font-display); font-size: 24px; margin:15px 0; text-decoration:none; cursor:pointer; }
+
+        /* Hero */
+        .hero { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 100px 8%; }
+        .hero h1 { font-family: var(--font-display); font-size: clamp(2.5rem, 8vw, 5rem); line-height:1.2; text-align:center; }
+        .hero p { color:#ccc; max-width: 500px; margin: 15px 0; text-align:center; letter-spacing: 4px; }
+        #countdown { font-family:var(--font-mono); font-size:22px; text-align:center; color:var(--gold); margin-top:20px; }
+
+        /* Modals */
+        .public-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .public-modal-overlay.active { display: flex; animation: fadeIn 0.3s ease; }
+        .auth-box { width: 90%; max-width: 400px; background: #0a0a0a; border: 1px solid var(--gold); padding: 40px; position: relative; box-shadow: 0 0 30px rgba(212,175,55,0.2); }
+        .auth-box h2 { color: var(--gold); font-family: var(--font-display); text-align: center; margin-bottom: 20px; }
+        .close-modal { position: absolute; top: 10px; right: 15px; color: #666; cursor: pointer; font-family: var(--font-mono); font-size: 20px; }
+        .btn-main { background: transparent; border: 1px solid var(--gold); color: var(--gold); padding: 12px; cursor: pointer; font-size: 11px; width: 100%; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px;}
+        .btn-main:hover { background: var(--gold); color: #000; }
+        .input-group { margin-bottom: 20px; }
+        .input-group label { display: block; font-size: 10px; color: #888; margin-bottom: 5px; font-family: var(--font-mono); }
+        .input-group input { width: 100%; background: #111; border: 1px solid #333; padding: 10px; color: #fff; outline: none; }
+
+        /* --- GM PANEL (Mobile Optimized) --- */
+        .modal-wrap { position:fixed; inset:0; display: none; justify-content:center; align-items:center; z-index:10001; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(12px); }
+        .modal-wrap.active { display:flex; }
+
+        .gm-panel { display:flex; width:95%; max-width:1100px; height:85vh; background: rgba(10,10,10,0.95); border: 1px solid rgba(212, 175, 55, 0.2); overflow: hidden; }
+        .gm-sidebar { width:240px; padding:30px 20px; display:flex; flex-direction:column; background: #050505; border-right: 1px solid rgba(255,255,255,0.05); }
+        .gm-sidebar h3 { color: var(--gold); font-size:12px; font-family: var(--font-display); margin-bottom:30px; letter-spacing: 3px; }
+        .gm-nav-item { padding:12px 15px; font-size:11px; cursor:pointer; color:#666; text-transform: uppercase; border-left: 2px solid transparent; margin-bottom: 5px; transition: 0.3s; }
+        .gm-nav-item.active { color: var(--gold); border-left-color: var(--gold); background: rgba(212, 175, 55, 0.05); }
+
+        .gm-content { flex:1; padding:40px; display:none; overflow-y:auto; }
+        .gm-content.active { display:block; }
+
+        .config-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding:20px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; }
+        #gmConsole { background: #050505; color: var(--green); font-family: var(--font-mono); height:300px; overflow-y:auto; padding:20px; font-size:11px; border:1px solid #1a1a1a; line-height: 1.6; }
+
+        /* ON/OFF Button Styles */
+        .status-btn { width: 100px; border: 1px solid #444; color: #fff; font-weight: 800; }
+        .status-btn.on { border-color: var(--green); color: var(--green); box-shadow: 0 0 10px rgba(0, 255, 136, 0.2); }
+        .status-btn.off { border-color: var(--red); color: var(--red); box-shadow: 0 0 10px rgba(255, 62, 62, 0.2); }
+
+        @media (max-width: 768px) {
+            .gm-panel { flex-direction: column; height: 95vh; width: 100%; }
+            .gm-sidebar { width: 100%; height: auto; padding: 15px; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.1); gap: 10px; }
+            .gm-sidebar h3 { display: none; }
+            .gm-nav-item { padding: 8px 15px; border-left: none; border-bottom: 2px solid transparent; margin: 0; white-space: nowrap; }
+            .gm-nav-item.active { border-bottom-color: var(--gold); }
+            .gm-sidebar div[style*="margin-top:auto"] { margin-top: 0 !important; margin-left: auto; display: flex; align-items: center; }
+            #sys-clock { display: none; }
+            .gm-content { padding: 20px; }
+            .gm-content h3 { font-size: 1.2rem; }
+            .btn-main { width: 100% !important; }
+            .config-card { flex-direction: column; align-items: flex-start; gap: 10px; }
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<div id="maint-shield">
+    <h1 class="glitch-text" id="maint-backdoor">PROTOCOL ZERO</h1>
+    <p style="color:#666;margin-top:15px;letter-spacing: 5px;">SYSTEM OFFLINE</p>
+</div>
+
+<div class="bg-fixed"></div>
+
+<div id="liveAlert">
+    <div class="live-tag"><div class="live-dot"></div> LIVE</div>
+    <div class="ticker-wrap"><div id="ann-text" class="ticker-text"></div></div>
+</div>
+
+<nav class="navbar">
+    <div class="brand" id="brandLogo">AETHELGARD</div>
+    <div class="burger" onclick="toggleMenu()"><div></div><div></div><div></div></div>
+</nav>
+
+<div class="nav-overlay" id="navOverlay">
+    <a class="nav-link" onclick="handleNavClick('download')">DOWNLOAD</a>
+    <a class="nav-link" onclick="handleNavClick('register')">REGISTER</a>
+    <a class="nav-link" onclick="handleNavClick('login')">LOGIN</a>
+    <a class="nav-link" onclick="toggleMenu()" style="color:var(--red); font-size: 14px; margin-top: 40px;">CLOSE INTERFACE</a>
+</div>
+
+<section class="hero">
+    <h1>LINEAGE <span style="color:var(--gold)">ETERNITY</span></h1>
+    <p>AWAKENING SOON</p>
+    <div id="countdown"></div>
+</section>
+
+<div id="modal-download" class="public-modal-overlay">
+    <div class="auth-box">
+        <span class="close-modal" onclick="closePublicModal('modal-download')">&times;</span>
+        <h2>GAME CLIENT</h2>
+        <button class="btn-main" style="margin-top:20px;">DOWNLOAD (64GB)</button>
+    </div>
+</div>
+
+<div id="modal-login" class="public-modal-overlay">
+    <div class="auth-box">
+        <span class="close-modal" onclick="closePublicModal('modal-login')">&times;</span>
+        <h2>SERVER LOGIN</h2>
+        <div class="input-group"><label>USER</label><input type="text"></div>
+        <div class="input-group"><label>PASS</label><input type="password"></div>
+        <button class="btn-main">ENTER WORLD</button>
+    </div>
+</div>
+
+<div id="modal-register" class="public-modal-overlay">
+    <div class="auth-box">
+        <span class="close-modal" onclick="closePublicModal('modal-register')">&times;</span>
+        <h2>CITIZEN REGISTRY</h2>
+        <div class="input-group"><label>EMAIL</label><input type="email"></div>
+        <div class="input-group"><label>USER</label><input type="text"></div>
+        <button class="btn-main">CREATE RECORD</button>
+    </div>
+</div>
+
+<div class="modal-wrap" id="modal-admin">
+    <div class="gm-panel">
+        <div class="gm-sidebar">
+            <h3>GM COMMAND</h3>
+            <div class="gm-nav-item active" onclick="tab(this,'critical')">Systems</div>
+            <div class="gm-nav-item" onclick="tab(this,'comms')">Broadcast</div>
+            <div class="gm-nav-item" onclick="tab(this,'logs')">System Logs</div>
+            <div style="margin-top:auto;">
+                <div id="sys-clock" style="font-size:10px; color:var(--gold); margin-bottom:15px; font-family: var(--font-mono);"></div>
+                <button class="btn-main" style="border-color:var(--red); color:var(--red); width: auto; padding: 8px 15px;" onclick="closeGM()">EXIT</button>
+            </div>
+        </div>
+
+        <div class="gm-content active" id="tab-critical">
+            <h3 style="color:var(--red); margin-bottom:20px;">SYSTEM OVERRIDE</h3>
+            <div class="config-card">
+                <div>Maintenance Lockdown</div>
+                <button class="btn-main status-btn off" id="maintBtn" onclick="toggleMaintenance()">OFF</button>
+            </div>
+        </div>
+
+        <div class="gm-content" id="tab-comms">
+            <h3>GLOBAL BROADCAST</h3>
+            <textarea id="ann-input" style="width:100%; height:120px; background:#111; color:var(--green); border:1px solid #333; margin:20px 0; padding:15px; font-family:var(--font-mono); resize:none;" placeholder="Enter message..."></textarea>
+            <button class="btn-main" style="width:200px;" onclick="updateAnn()">EXECUTE</button>
+            <button class="btn-main" style="width:200px; margin-top:10px; border-color:#444; color:#666;" onclick="clearAnn()">CLEAR</button>
+        </div>
+
+        <div class="gm-content" id="tab-logs">
+            <h3>DATA STREAM</h3>
+            <div id="gmConsole">[SESSION INITIALIZED...]</div>
+        </div>
+    </div>
+</div>
+
+<script>
+const state = { maintenance: false, systemAwake: false, annTimer: null };
+
+function toggleMenu() {
+    const overlay = document.getElementById('navOverlay');
+    overlay.classList.toggle('active');
+    document.body.classList.toggle('overlay-active', overlay.classList.contains('active'));
+}
+
+function handleNavClick(type) {
+    toggleMenu();
+    if (!state.systemAwake) {
+        showLockedAlert();
+        return;
+    }
+    document.getElementById('modal-' + type).classList.add('active');
+}
+
+function closePublicModal(id) { document.getElementById(id).classList.remove('active'); }
+
+function updateAnn() {
+    const bar = document.getElementById('liveAlert');
+    const text = document.getElementById('ann-text');
+    const msg = document.getElementById('ann-input').value;
+    if (!msg) return;
+
+    bar.classList.remove('active');
+    setTimeout(() => {
+        text.innerText = "GM: " + msg + " — PROTOCOL ACTIVE — ";
+        text.style.animation = 'none';
+        text.offsetHeight; 
+        text.style.animation = null; 
+        bar.classList.add('active');
+        addLog("Broadcast: " + msg);
+    }, 100);
+
+    if (state.annTimer) clearTimeout(state.annTimer);
+    state.annTimer = setTimeout(() => { bar.classList.remove('active'); }, 30000);
+}
+
+function clearAnn() {
+    document.getElementById('liveAlert').classList.remove('active');
+}
+
+function showLockedAlert() {
+    const text = document.getElementById('ann-text');
+    const bar = document.getElementById('liveAlert');
+    bar.classList.remove('active');
+    setTimeout(() => {
+        /* UPDATED: "SYSTEM UNDER MAINTENANCE" */
+        text.innerText = "ACCESS DENIED: SYSTEM UNDER MAINTENANCE —";
+        bar.classList.add('active');
+    }, 50);
+    setTimeout(() => bar.classList.remove('active'), 10000);
+}
+
+function openGM() {
+    document.getElementById('modal-admin').classList.add('active');
+    document.body.classList.add('gm-active');
+    addLog("SESSION STARTED");
+}
+
+function closeGM() {
+    document.getElementById('modal-admin').classList.remove('active');
+    document.body.classList.remove('gm-active');
+}
+
+function tab(el, id) {
+    document.querySelectorAll('.gm-nav-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.gm-content').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('tab-' + id).classList.add('active');
+}
+
+function toggleMaintenance() {
+    state.maintenance = !state.maintenance;
+    const shield = document.getElementById('maint-shield');
+    const btn = document.getElementById('maintBtn');
+    
+    shield.style.display = state.maintenance ? 'flex' : 'none';
+    
+    // UI Update para sa ON/OFF button
+    if (state.maintenance) {
+        btn.innerText = "ON";
+        btn.classList.replace('off', 'on');
+    } else {
+        btn.innerText = "OFF";
+        btn.classList.replace('on', 'off');
+    }
+    
+    addLog("Maint: " + (state.maintenance ? "ON" : "OFF"));
+}
+
+function addLog(msg) {
+    const c = document.getElementById('gmConsole');
+    c.innerHTML += `<div><span style="color:#555;">[${new Date().toLocaleTimeString()}]</span> ${msg}</div>`;
+    c.scrollTop = c.scrollHeight;
+}
+
+// --- SHARED BACKDOOR LOGIC ---
+let clicks = 0, timer;
+const triggerAdmin = () => {
+    clicks++; 
+    clearTimeout(timer);
+    timer = setTimeout(() => clicks = 0, 2000);
+    if (clicks === 3) {
+        if (prompt("VERIFY IDENTITY") === "admin") openGM();
+        clicks = 0;
+    }
+};
+
+document.getElementById('brandLogo').onclick = triggerAdmin;
+document.getElementById('maint-backdoor').onclick = triggerAdmin;
+
+setInterval(() => document.getElementById('sys-clock').innerText = new Date().toLocaleTimeString(), 1000);
+
+const target = new Date("December 31, 2026 23:59:59").getTime(); 
+function updateCountdown() {
+    const now = new Date().getTime();
+    const diff = target - now;
+    if (diff < 0) {
+        document.getElementById('countdown').innerText = "SYSTEM AWAKE";
+        state.systemAwake = true;
+        return;
+    }
+    const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const s = Math.floor((diff % (1000 * 60)) / 1000);
+    document.getElementById('countdown').innerText = `${d}D ${h}H ${m}M ${s}S`;
+}
+setInterval(updateCountdown, 1000);
+updateCountdown();
+</script>
+
+</body>
+</html>
